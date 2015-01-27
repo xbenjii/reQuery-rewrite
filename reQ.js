@@ -4,17 +4,12 @@ var dgram = require('dgram'),
 
 var Query = function(options) {
     this.options = {};
-    var self = this;
-    return new Promise(function(resolve, reject) {
-        self.promise = {
-            resolve: resolve,
-            reject: reject
-        };
-        self.setOptions(options);
-        self.setupListener();
-        self.lookup();
-        self.sendQuery(self.options.buffer);
-    });
+    this.deferred = Promise.pending();
+    this.setOptions(options);
+    this.setupListener();
+    this.lookup();
+    this.sendQuery();
+    return this.deferred.promise;
 };
 
 Query.prototype.log = function(message) {
@@ -28,29 +23,28 @@ Query.prototype.setupListener = function() {
     this.socket = dgram.createSocket('udp4');
     this.socket.unref();
     if (typeof this.options.listenerPort !== "undefined" && this.options.listenerPort !== false) {
-        this.socket.bind(port);
-        this.log('Bound to port: ' + port);
+        this.socket.bind(this.options.listenerPort);
+        this.log('Bound to port: ' + this.options.listenerPort);
     }
     this.socket.on('message', function(buffer, info) {
         if (info.address == self.options.host && info.port == self.options.port) {
-            self.socket.close();
             clearTimeout(self.timeout)
-            return self.promise.resolve(buffer);
+            return self.deferred.fulfill(buffer);
         }
     });
 };
 
-Query.prototype.sendQuery = function(buffer) {
+Query.prototype.sendQuery = function() {
     var self = this;
-    if (typeof buffer === 'string') {
-        buffer = new Buffer(buffer, 'binary');
+    if (typeof this.options.buffer === 'string') {
+        this.options.buffer = new Buffer(this.options.buffer, 'binary');
     }
     if (!this.socket) {
         this.error('Socket is not setup');
     }
     process.nextTick(function() {
-        self.socket.send(buffer, 0, buffer.length, self.options.port, self.options.host, function(error) {
-            self.log('Sent buffer: ' + buffer + 'to ' + self.options.host + ':' + self.options.port);
+        self.socket.send(self.options.buffer, 0, self.options.buffer.length, self.options.port, self.options.host, function(error) {
+            self.log('Sent buffer: ' + self.options.buffer + 'to ' + self.options.host + ':' + self.options.port);
             if (error) {
                 self.error(error);
             }
@@ -62,8 +56,7 @@ Query.prototype.sendQuery = function(buffer) {
 };
 
 Query.prototype.error = function(error) {
-    this.socket.close();
-    this.promise.reject(error);
+    this.deferred.reject(error);
 };
 
 
@@ -88,8 +81,8 @@ Query.prototype.lookup = function() {
         //Do nothing
     } else if (/^\d+\.\d+\.\d+\.\d+\:\d+$/.test(this.options.host)) {
         var temp = this.options.host.split(':');
-        this.setOption('host', split[0]);
-        this.setOption('port', split[1]);
+        this.setOption('host', temp[0]);
+        this.setOption('port', temp[1]);
     } else {
         lookup(this.options.host).then(function(address) {
             self.log(address);
@@ -101,4 +94,7 @@ Query.prototype.lookup = function() {
     }
 };
 
-module.exports = Query;
+module.exports = {
+    Query: Query,
+    Promise: Promise
+};

@@ -1,16 +1,31 @@
-var Query = require('./reQ');
+var reQ = require('./reQ');
 
-var query = new Query({
-    buffer: '\xff\xff\xff\xffgetservers IW4 61586 full empty\x00',
-    host: '92.222.217.186',
-    port: 20810,
-    debug: false,
-    listenerPort: false
-}).then(parse, function(error) {
-    console.log('Error: %s', error);
-}).then(function(servers) {
-    console.log(servers);
-});
+var query = new reQ.Query({
+        buffer: '\xff\xff\xff\xffgetservers IW4 61586 full empty\x00',
+        host: '92.222.217.186',
+        port: 20810,
+        debug: false,
+        listenerPort: 1337
+    })
+    .then(parse)
+    .then(function(servers) {
+        return servers.map(function(server) {
+            return new reQ.Query({
+                buffer: '\xff\xff\xff\xffgetinfo\x00',
+                host: server
+            });
+        });
+    }).settle().then(function(serverData) {
+        console.log(serverData.map(function(data) {
+            if (data.isFulfilled()) 
+                return data.value();
+            else if (data.isRejected())
+                return data.reason();
+        }));
+    })
+    .catch(function(error) {
+        console.log(error);
+    });
 
 function parse(buffer) {
     var servers = [];
