@@ -26,7 +26,7 @@ Query.prototype.log = function(message) {
 Query.prototype.setupListener = function() {
     var self = this;
     this.socket = dgram.createSocket('udp4');
-    this.socket.ref();
+    this.socket.unref();
     if (typeof this.options.listenerPort !== "undefined" && this.options.listenerPort !== false) {
         this.socket.bind(port);
         this.log('Bound to port: ' + port);
